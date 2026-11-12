@@ -28,7 +28,7 @@
         240
       ],
       "parameters": {
-        "jsCode": "const b = $input.first().json.body ?? {};\n\n// Trim and cap the message so one visitor cannot send a novel to the model.\n// An empty message is treated as a greeting rather than rejected.\nconst message = String(b.message ?? '').trim().slice(0, 2000) || 'Hi';\n\n// Channel decides the reply style; anything unknown is treated as web chat.\nconst channel = ['web', 'whatsapp', 'email'].includes(b.channel) ? b.channel : 'web';\n\n// Test runs (the 30-case test set) behave exactly the same, except that\n// escalations are logged but never reach Slack or a customer's inbox.\nconst test = b.test === true;\n\n// One memory per conversation. Prefix with the channel so a web session and\n// a WhatsApp number can never share history; fall back to the execution id,\n// never a constant, so anonymous visitors are not pooled together.\nconst raw = String(b.sessionId ?? '').trim().slice(0, 100).replace(/[^A-Za-z0-9_+.:-]/g, '');\nconst sessionId = `${test ? 'test:' : ''}${channel}:${raw || 'anon-' + $execution.id}`;\n\nreturn [{ json: { message, channel, test, sessionId } }];\n"
+        "jsCode": "const j = $input.first().json;\n\n// The website chat posts { sessionId, message, channel } to the webhook; a\n// WhatsApp message arrives from Read Message (or Describe Photo For Agent) as\n// { from, text }, keyed by the sender's number.\nconst b = j.body ?? (j.from ? { sessionId: j.from, message: j.text, channel: 'whatsapp' } : {});\n\n// Trim and cap the message so one visitor cannot send a novel to the model.\n// An empty message is treated as a greeting rather than rejected.\nconst message = String(b.message ?? '').trim().slice(0, 2000) || 'Hi';\n\n// Channel decides the reply style; anything unknown is treated as web chat.\nconst channel = ['web', 'whatsapp', 'email'].includes(b.channel) ? b.channel : 'web';\n\n// Test runs (the 30-case test set) behave exactly the same, except that\n// escalations are logged but never reach Slack or a customer's inbox.\nconst test = b.test === true;\n\n// One memory per conversation. Prefix with the channel so a web session and\n// a WhatsApp number can never share history; fall back to the execution id,\n// never a constant, so anonymous visitors are not pooled together.\nconst raw = String(b.sessionId ?? '').trim().slice(0, 100).replace(/[^A-Za-z0-9_+.:-]/g, '');\nconst sessionId = `${test ? 'test:' : ''}${channel}:${raw || 'anon-' + $execution.id}`;\n\nreturn [{ json: { message, channel, test, sessionId } }];\n"
       }
     },
     {
@@ -209,7 +209,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        1200,
+        1220,
         240
       ],
       "parameters": {
@@ -328,7 +328,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        960,
+        880,
         240
       ],
       "parameters": {
@@ -1464,7 +1464,7 @@
         -64
       ],
       "parameters": {
-        "content": "## 1 · Customer message in, reply out\n\nThe website chat sends the customer's message here. The agent reads the conversation so far and uses its tools:\n- **Look Up Order** answers only when the order number AND the email match, so nobody can read another customer's order.\n- **Check Product Stock** for prices, stock and restock dates.\n- **Search Store Policies** answers only from the store's policy document.\n- **Request Team Action** passes refunds and hand-overs to a person (section 3).\n\nThe reply goes back before anything is logged, so the customer never waits.",
+        "content": "## 1 · Customer message in, reply out\n\nWhatsApp messages (section 0) and the website chat (**Chat Message In**) both arrive here. The agent reads the conversation so far and uses its tools:\n- **Look Up Order** answers only when the order number AND the email match, so nobody can read another customer's order.\n- **Check Product Stock** for prices, stock and restock dates.\n- **Search Store Policies** answers only from the store's policy document.\n- **Request Team Action** passes refunds and hand-overs to a person (section 3).\n\nThe reply goes back before anything is logged, so the customer never waits: on WhatsApp for a WhatsApp message (**On WhatsApp?**), otherwise to the website chat.",
         "height": 900,
         "width": 1420,
         "color": 7
@@ -1685,6 +1685,282 @@
         },
         "options": {}
       }
+    },
+    {
+      "id": "448533e1-decf-43af-994e-a87a060ad203",
+      "name": "WhatsApp Message In",
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        16,
+        -640
+      ],
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      }
+    },
+    {
+      "id": "9cd60966-da37-4278-bf4d-6b36d0565262",
+      "name": "Read Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        236,
+        -640
+      ],
+      "parameters": {
+        "jsCode": "// Meta posts both new messages and delivery/read receipts here.\n// Keep only real customer messages; receipts have no messages array.\nconst out = [];\nfor (const item of $input.all()) {\n  const m = item.json.messages?.[0];\n  if (!m) continue;\n  out.push({ json: {\n    from: m.from,                                   // sender's number, digits only\n    type: m.type,\n    text: m.type === 'text' ? String(m.text?.body ?? '').trim() : '',\n    mediaId: m.type === 'image' ? m.image?.id : '',\n    caption: m.type === 'image' ? String(m.image?.caption ?? '').trim() : '',\n  } });\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "ec419916-d347-4d50-82e8-e6b43819be50",
+      "name": "Is It Text?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        456,
+        -640
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "30a48356-f2f7-4d0b-8208-838fe951f60f",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b4d10e23-42d4-47a8-b22b-d8fd817f7da6",
+      "name": "Is It A Photo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        676,
+        -460
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a3935b34-db2a-412c-9086-27386cd98a80",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "image",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "0a8b9368-c096-4a29-a5b8-0f319fa10bfe",
+      "name": "Get Photo Link",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        -480
+      ],
+      "parameters": {
+        "resource": "media",
+        "operation": "mediaUrlGet",
+        "mediaGetId": "={{ $json.mediaId }}"
+      }
+    },
+    {
+      "id": "e2ca63cb-47be-480e-9c00-f750e5d0ba54",
+      "name": "Download Photo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1116,
+        -480
+      ],
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "d233d34d-c1f8-48c5-9d99-bc506353ac86",
+      "name": "Save Photo To Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1336,
+        -480
+      ],
+      "parameters": {
+        "name": "={{ 'whatsapp-' + $('Read Message').item.json.from.slice(-4) + '-' + $now.toFormat('yyyyLLdd-HHmmss') + '.jpg' }}",
+        "driveId": {
+          "__rl": true,
+          "value": "YOUR_DRIVE_ID",
+          "mode": "list",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_DRIVE_FOLDER_ID",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "6a577ef1-5921-447d-8742-a57be9c5659a",
+      "name": "Describe Photo For Agent",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1556,
+        -480
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "00a39d53-331f-44a8-b2e0-1687145f9633",
+              "name": "from",
+              "type": "string",
+              "value": "={{ $('Read Message').item.json.from }}"
+            },
+            {
+              "id": "4a5560e9-c277-4baa-b771-0ef33fb58f37",
+              "name": "text",
+              "type": "string",
+              "value": "={{ '[The customer sent a photo on WhatsApp. It is saved for the team here: ' + $json.webViewLink + ' ]' + ($('Read Message').item.json.caption ? ' Caption: ' + $('Read Message').item.json.caption : '') }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "971b1817-be79-4a19-9226-e2154a70fb76",
+      "name": "Ask For Text",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        -300
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "YOUR_WHATSAPP_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $('Read Message').item.json.from }}",
+        "textBody": "I can read text messages and photos. Please type your question, and include your order number if it is about an order.",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "77f37dcb-1476-47b4-93cb-d96146fb23fb",
+      "name": "Reply On WhatsApp",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "onError": "continueRegularOutput",
+      "position": [
+        1220,
+        80
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "YOUR_WHATSAPP_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $('Read Message').first().json.from }}",
+        "textBody": "={{ $('Check Reply').first().json.reply }}",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "133c1169-0dbf-408d-83ed-b561852955d8",
+      "name": "On WhatsApp?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1050,
+        240
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "924da562-8f2e-461c-b7d8-9d04c2955026",
+              "leftValue": "={{ $('WhatsApp Message In').isExecuted }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b2e054c8-5c04-4e6f-b346-013564ad8029",
+      "name": "Phase 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -64,
+        -884
+      ],
+      "parameters": {
+        "width": 1800,
+        "height": 760,
+        "color": 7,
+        "content": "## 0 · Customer messages on WhatsApp\n\nWhatsApp messages arrive here. Text goes straight to the agent in section 1. Photos, such as a damaged item, are saved to the Google Drive folder \"Fernhill - Customer Photos (WhatsApp)\" and the agent gets the link, so the team sees it in the case. Voice notes and stickers get a short note asking the customer to type.\n\nThe answer goes back on WhatsApp (**On WhatsApp?** in section 1)."
+      }
     }
   ],
   "connections": {
@@ -1846,7 +2122,7 @@
       "main": [
         [
           {
-            "node": "Send Reply",
+            "node": "On WhatsApp?",
             "type": "main",
             "index": 0
           }
@@ -2077,6 +2353,137 @@
         [
           {
             "node": "Alert Team: Handover",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Message In": {
+      "main": [
+        [
+          {
+            "node": "Read Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Message": {
+      "main": [
+        [
+          {
+            "node": "Is It Text?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is It Text?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is It A Photo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is It A Photo?": {
+      "main": [
+        [
+          {
+            "node": "Get Photo Link",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask For Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Photo Link": {
+      "main": [
+        [
+          {
+            "node": "Download Photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Photo": {
+      "main": [
+        [
+          {
+            "node": "Save Photo To Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Photo To Drive": {
+      "main": [
+        [
+          {
+            "node": "Describe Photo For Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Describe Photo For Agent": {
+      "main": [
+        [
+          {
+            "node": "Prepare Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On WhatsApp?": {
+      "main": [
+        [
+          {
+            "node": "Reply On WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply On WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Log Conversation",
             "type": "main",
             "index": 0
           }
