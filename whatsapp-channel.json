@@ -1,0 +1,414 @@
+{
+  "name": "Fernhill Outdoor Supply - WhatsApp Channel",
+  "nodes": [
+    {
+      "id": "0741e5d3-259e-4943-8a0c-42901a442b66",
+      "name": "WhatsApp Message In",
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      }
+    },
+    {
+      "id": "f2e49aa8-c1a1-4ff3-adde-fb47b2d04976",
+      "name": "Read Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Meta posts both new messages and delivery/read receipts here.\n// Keep only real customer messages; receipts have no messages array.\nconst out = [];\nfor (const item of $input.all()) {\n  const m = item.json.messages?.[0];\n  if (!m) continue;\n  out.push({ json: {\n    from: m.from,                                   // sender's number, digits only\n    type: m.type,\n    text: m.type === 'text' ? String(m.text?.body ?? '').trim() : '',\n    mediaId: m.type === 'image' ? m.image?.id : '',\n    caption: m.type === 'image' ? String(m.image?.caption ?? '').trim() : '',\n  } });\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "ebd02ff6-d274-4d26-a9f0-6eae66ffea7b",
+      "name": "Is It Text?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "30a48356-f2f7-4d0b-8208-838fe951f60f",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "2d07d41f-1f9c-48fa-b16b-b6c4f27fd86b",
+      "name": "Ask Fernhill Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "onError": "continueErrorOutput",
+      "position": [
+        680,
+        -100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-n8n-instance.example.com/webhook/fernhill-support-chat",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ sessionId: $json.from, message: $json.text, channel: \"whatsapp\" }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      }
+    },
+    {
+      "id": "d81fc149-1cbb-4832-a029-57df4e8003fb",
+      "name": "Send Reply",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        940,
+        -200
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "YOUR_WHATSAPP_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $('Read Message').item.json.from }}",
+        "textBody": "={{ $json.reply }}",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "92173cd9-62c2-4f5f-bf80-21ed286b1528",
+      "name": "Send Sorry",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        940,
+        0
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "YOUR_WHATSAPP_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $('Read Message').item.json.from }}",
+        "textBody": "Sorry, I couldn't answer just now. Please try again in a minute, or a member of the team will get back to you.",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "fb72782c-3fc7-43b2-9e7c-21272ec7cf75",
+      "name": "Ask For Text",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        240
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "phoneNumberId": "YOUR_WHATSAPP_PHONE_NUMBER_ID",
+        "recipientPhoneNumber": "={{ $('Read Message').item.json.from }}",
+        "textBody": "I can read text messages and photos. Please type your question, and include your order number if it is about an order.",
+        "additionalFields": {}
+      }
+    },
+    {
+      "id": "001a18c5-28ba-4827-b16d-cba4668350dc",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -320
+      ],
+      "parameters": {
+        "width": 1200,
+        "height": 200,
+        "content": "## Fernhill on WhatsApp\nEvery WhatsApp text goes to the Fernhill support agent (channel = whatsapp, memory keyed by the sender's number), and its answer is sent back from the test number. Non-text messages get a short \"please type\" note; if the agent fails, the customer gets an apology instead of silence.\nPhotos are saved to the Drive folder \"Fernhill - Customer Photos (WhatsApp)\" and the agent gets the link, so the team sees it in the case. Voice notes and stickers get a \"please type\" note."
+      }
+    },
+    {
+      "id": "ca0efda9-9471-4d1f-8af5-0da5f7a2d67a",
+      "name": "Is It A Photo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        680,
+        140
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a3935b34-db2a-412c-9086-27386cd98a80",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "image",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "8c1455af-b77d-438c-a05e-4738dd9e1b42",
+      "name": "Get Photo Link",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        40
+      ],
+      "parameters": {
+        "resource": "media",
+        "operation": "mediaUrlGet",
+        "mediaGetId": "={{ $json.mediaId }}"
+      }
+    },
+    {
+      "id": "bc67a2a9-251d-422a-86de-8aedccd0c117",
+      "name": "Download Photo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        40
+      ],
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "whatsAppApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "2c0375eb-6bcd-473e-835a-af27581d8525",
+      "name": "Save Photo To Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1340,
+        40
+      ],
+      "parameters": {
+        "name": "={{ 'whatsapp-' + $('Read Message').item.json.from.slice(-4) + '-' + $now.toFormat('yyyyLLdd-HHmmss') + '.jpg' }}",
+        "driveId": {
+          "__rl": true,
+          "value": "YOUR_DRIVE_ID",
+          "mode": "list",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_DRIVE_FOLDER_ID",
+          "mode": "id"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a211e3d7-eaad-44ac-a606-d7498e82edf4",
+      "name": "Describe Photo For Agent",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1560,
+        40
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "00a39d53-331f-44a8-b2e0-1687145f9633",
+              "name": "from",
+              "type": "string",
+              "value": "={{ $('Read Message').item.json.from }}"
+            },
+            {
+              "id": "4a5560e9-c277-4baa-b771-0ef33fb58f37",
+              "name": "text",
+              "type": "string",
+              "value": "={{ '[The customer sent a photo on WhatsApp. It is saved for the team here: ' + $json.webViewLink + ' ]' + ($('Read Message').item.json.caption ? ' Caption: ' + $('Read Message').item.json.caption : '') }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "WhatsApp Message In": {
+      "main": [
+        [
+          {
+            "node": "Read Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Message": {
+      "main": [
+        [
+          {
+            "node": "Is It Text?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is It Text?": {
+      "main": [
+        [
+          {
+            "node": "Ask Fernhill Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is It A Photo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Fernhill Agent": {
+      "main": [
+        [
+          {
+            "node": "Send Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Sorry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is It A Photo?": {
+      "main": [
+        [
+          {
+            "node": "Get Photo Link",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask For Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Photo Link": {
+      "main": [
+        [
+          {
+            "node": "Download Photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Photo": {
+      "main": [
+        [
+          {
+            "node": "Save Photo To Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Photo To Drive": {
+      "main": [
+        [
+          {
+            "node": "Describe Photo For Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Describe Photo For Agent": {
+      "main": [
+        [
+          {
+            "node": "Ask Fernhill Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "America/Los_Angeles"
+  },
+  "pinData": {}
+}
