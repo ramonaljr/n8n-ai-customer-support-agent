@@ -16,7 +16,7 @@ A WhatsApp support agent for an online outdoor gear store that answers from the 
 4. A person decides
 5. Logs and a daily summary
 
-Built an n8n support agent on WhatsApp, using OpenAI, that answers only from the store policies document and the real order and stock records in Airtable. It asks for the order number and email before sharing anything about an order. Anything involving money, and any upset or unusual case, goes to a person in Slack instead of being promised in the chat.
+Built an n8n support agent on WhatsApp, using OpenAI, that answers only from the store policies document and the real order and stock records in Airtable. It asks for the order number and email before sharing anything about an order. Anything involving money, and any upset or unusual case, goes to a person in Slack instead of being promised in the chat. A handed-over customer keeps chatting on WhatsApp while the team replies from a Slack thread.
 
 ## What's in this repo
 
