@@ -22,21 +22,21 @@ Built an n8n support agent on WhatsApp, using OpenAI, that answers only from the
 
 | File | What it is |
 |---|---|
-| `workflow.json` | The whole build in one workflow, 87 nodes (78 working nodes and 9 sticky notes in 8 numbered sections), ready to import |
+| `workflow.json` | The whole build in one workflow, 88 nodes (79 working nodes and 9 sticky notes in 8 numbered sections), ready to import |
 | `docs/process-map.svg` | The process map from the case study |
 
 **Two ways in, one agent.** Triggers: `WhatsApp Message In`, the webhook `Chat Message In` (for a website chat), `Team Request In` (called by the agent's `Request Team Action` tool), `Team Reply In Thread` (Slack thread replies), `Every Day At 17:00`, `Reload Policies On Start` and `Load Policies (Run Manually)`.
 
 - **WhatsApp.** `Read Message` keeps real customer messages and drops delivery and read receipts. `New Message?` skips any message WhatsApp delivers twice. Text waits 4 seconds (`Wait For More`): several messages sent in a row are joined and answered once (`Merge Burst`). The agent is keyed by the sender's number, so it remembers the conversation. Photos (a damaged item, say) are saved to Google Drive, and the agent gets the link and caption. Voice notes, stickers and files become a short note, so the agent asks the customer to type.
-- **New WhatsApp chat.** On a customer's first message, after 12 hours of quiet, or after a closed case, the bot greets them, still answers their question, and asks for their name, email and order number (if they have one), skipping anything already on file. The agent's `Save Customer Details` tool records what they give on the case (`Save Details On Case`); an email is saved only if it matches the order, or if no order number was given. The team watches open chats in the Support Cases view `Open cases`.
+- **New WhatsApp chat.** On a customer's first message, after 12 hours of quiet, or after a closed case, the bot greets them, still answers their question, and asks for their name, email and order number (if they have one), skipping anything already on file. That greeting and question are added in code (`Check Reply`), not left to the AI, so they never get dropped. `Forget Old Chat` also clears the bot's memory of earlier chats, so it can't repeat an old answer. The agent's `Save Customer Details` tool records what they give on the case (`Save Details On Case`); an email is saved only if it matches the order, or if no order number was given. The team watches open chats in the Support Cases view `Open cases`.
 - **Website chat.** `Chat Message In` takes `{ sessionId, message, channel }` and answers in the HTTP response.
 - **Back the same way.** `On WhatsApp?` checks whether the run started from WhatsApp: if so, `Reply On WhatsApp` sends the answer; otherwise `Send Reply` returns it to the website chat. If the agent fails, `Check Reply` still gives the customer a polite reply and the team gets a Slack alert.
 
-**The right model for each message.** `OpenAI Chat Model` picks the model per message with a fixed keyword check, not the AI: routine questions go to `gpt-5.4-mini`, and anything that mentions a refund, return, cancellation, damage, safety, legal action, anger, a repeat complaint or asking for a person (or uses `!!` or shouting) goes to `gpt-5.4`.
+**The right model for each message.** `OpenAI Chat Model` picks the model per message with a fixed keyword check, not the AI: routine questions go to the low-cost `gpt-6-luna`, and anything that mentions a refund, return, cancellation, damage, safety, legal action, anger, a repeat complaint or asking for a person (or uses `!!` or shouting) goes to `gpt-6.1-terra`.
 
 Fixed rules decide, not the AI: `Apply Rules` re-checks the order number and email, sends money requests (refund, replacement, exchange, cancellation, discount) on a verified order to Slack for approval, and hands everything else to a person. The approval is a Slack form, not a plain link, so a link preview can never approve anything.
 
-**A WhatsApp handover is a live chat in Slack.** `Post Handover To Slack` posts the case with the customer's WhatsApp name, and that post becomes the case's thread. Until the case is closed the bot stays silent: the customer's messages appear in the thread, and each reply typed in the thread goes to the customer on WhatsApp and gets a ✅ reaction once WhatsApp accepts it. If the order wasn't verified, the bot asks once for the order email; when the customer sends it, the workflow checks it against the order and saves it on the case only if it matches. Typing `close` (or `close: your closing words`) in the thread closes the case, tells the customer on WhatsApp, and hands them back to the bot. If WhatsApp refuses a message (usually because the customer's last message was more than 24 hours ago), the thread says so and gives the case email to use instead.
+**A WhatsApp handover is a live chat in Slack.** `Post Handover To Slack` posts the case with the name the customer gave (or their WhatsApp name if they gave none), and that post becomes the case's thread. Until the case is closed the bot stays silent: the customer's messages appear in the thread, and each reply typed in the thread goes to the customer on WhatsApp and gets a ✅ reaction once WhatsApp accepts it. If the order wasn't verified, the bot asks once for the order email; when the customer sends it, the workflow checks it against the order and saves it on the case only if it matches. Typing `close` (or `close: your closing words`) in the thread closes the case, tells the customer on WhatsApp, and hands them back to the bot. If WhatsApp refuses a message (usually because the customer's last message was more than 24 hours ago), the thread says so and gives the case email to use instead.
 
 ## Set it up
 
@@ -47,7 +47,7 @@ Fixed rules decide, not the AI: `Apply Rules` re-checks the order number and ema
    - Airtable (personal access token) (13 nodes)
    - Slack API (bot token) (11 nodes): posts, thread replies, the ✅ reaction and `Team Reply In Thread`; subscribe the app to `message.channels` events and invite it to the channel
    - WhatsApp API (5 nodes): an access token and your WhatsApp Business Account ID, for replies and fetching photos
-   - OpenAI (3 nodes): the chat model (it switches between `gpt-5.4-mini` and `gpt-5.4`) and both embeddings nodes
+   - OpenAI (3 nodes): the chat model (it switches between `gpt-6-luna` and `gpt-6.1-terra`) and both embeddings nodes
    - Google Drive (OAuth2) (2 nodes): the policies document and the customer photos folder
    - WhatsApp OAuth API (1 node): the app ID and secret, for `WhatsApp Message In`
    - Gmail (OAuth2) (1 node)
