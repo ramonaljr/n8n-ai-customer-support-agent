@@ -16,20 +16,23 @@ A WhatsApp support agent for an online outdoor gear store that answers from the 
 4. A person decides
 5. Logs and a daily summary
 
-Built an n8n support agent on WhatsApp, using OpenAI, that answers only from the store policies document and the real order and stock records in Airtable. It asks for the order number and email before sharing anything about an order. Anything involving money, and any upset or unusual case, goes to a person in Slack instead of being promised in the chat. A handed-over customer keeps chatting on WhatsApp while the team replies from a Slack thread.
+Built an n8n support agent on WhatsApp, using OpenAI, that answers only from the store policies document and the real order and stock records in Airtable. A new chat starts with a greeting that asks for the customer name, email and order number, and routine questions go to a smaller, cheaper model while refunds, complaints and anything risky go to the full model. It asks for the order number and email before sharing anything about an order. Anything involving money, and any upset or unusual case, goes to a person in Slack instead of being promised in the chat. A handed-over customer keeps chatting on WhatsApp while the team replies from a Slack thread.
 
 ## What's in this repo
 
 | File | What it is |
 |---|---|
-| `workflow.json` | The whole build in one workflow, 83 nodes (74 working nodes and 9 sticky notes in 8 numbered sections), ready to import |
+| `workflow.json` | The whole build in one workflow, 87 nodes (78 working nodes and 9 sticky notes in 8 numbered sections), ready to import |
 | `docs/process-map.svg` | The process map from the case study |
 
 **Two ways in, one agent.** Triggers: `WhatsApp Message In`, the webhook `Chat Message In` (for a website chat), `Team Request In` (called by the agent's `Request Team Action` tool), `Team Reply In Thread` (Slack thread replies), `Every Day At 17:00`, `Reload Policies On Start` and `Load Policies (Run Manually)`.
 
 - **WhatsApp.** `Read Message` keeps real customer messages and drops delivery and read receipts. `New Message?` skips any message WhatsApp delivers twice. Text waits 4 seconds (`Wait For More`): several messages sent in a row are joined and answered once (`Merge Burst`). The agent is keyed by the sender's number, so it remembers the conversation. Photos (a damaged item, say) are saved to Google Drive, and the agent gets the link and caption. Voice notes, stickers and files become a short note, so the agent asks the customer to type.
+- **New WhatsApp chat.** On a customer's first message, after 12 hours of quiet, or after a closed case, the bot greets them, still answers their question, and asks for their name, email and order number (if they have one), skipping anything already on file. The agent's `Save Customer Details` tool records what they give on the case (`Save Details On Case`); an email is saved only if it matches the order, or if no order number was given. The team watches open chats in the Support Cases view `Open cases`.
 - **Website chat.** `Chat Message In` takes `{ sessionId, message, channel }` and answers in the HTTP response.
 - **Back the same way.** `On WhatsApp?` checks whether the run started from WhatsApp: if so, `Reply On WhatsApp` sends the answer; otherwise `Send Reply` returns it to the website chat. If the agent fails, `Check Reply` still gives the customer a polite reply and the team gets a Slack alert.
+
+**The right model for each message.** `OpenAI Chat Model` picks the model per message with a fixed keyword check, not the AI: routine questions go to `gpt-5.4-mini`, and anything that mentions a refund, return, cancellation, damage, safety, legal action, anger, a repeat complaint or asking for a person (or uses `!!` or shouting) goes to `gpt-5.4`.
 
 Fixed rules decide, not the AI: `Apply Rules` re-checks the order number and email, sends money requests (refund, replacement, exchange, cancellation, discount) on a verified order to Slack for approval, and hands everything else to a person. The approval is a Slack form, not a plain link, so a link preview can never approve anything.
 
@@ -41,11 +44,10 @@ Fixed rules decide, not the AI: `Apply Rules` re-checks the order number and ema
 2. In n8n, open **Workflows → Import from File** and choose `workflow.json`.
 3. Create these credentials and select them on the nodes that need them:
 
-   - Airtable (personal access token) (12 nodes)
-   - Slack (OAuth2) (10 nodes): posts, thread replies and the ✅ reaction
-   - Slack API (1 node): a bot token for `Team Reply In Thread`, with the app subscribed to `message.channels` events and invited to the channel
+   - Airtable (personal access token) (13 nodes)
+   - Slack API (bot token) (11 nodes): posts, thread replies, the ✅ reaction and `Team Reply In Thread`; subscribe the app to `message.channels` events and invite it to the channel
    - WhatsApp API (5 nodes): an access token and your WhatsApp Business Account ID, for replies and fetching photos
-   - OpenAI (3 nodes): the chat model and both embeddings nodes
+   - OpenAI (3 nodes): the chat model (it switches between `gpt-5.4-mini` and `gpt-5.4`) and both embeddings nodes
    - Google Drive (OAuth2) (2 nodes): the policies document and the customer photos folder
    - WhatsApp OAuth API (1 node): the app ID and secret, for `WhatsApp Message In`
    - Gmail (OAuth2) (1 node)
@@ -53,9 +55,9 @@ Fixed rules decide, not the AI: `Apply Rules` re-checks the order number and ema
 
 4. Replace the placeholders with your own records:
 
-   - `THIS_WORKFLOW_ID` (2×): the workflow calls itself, so use its own ID from the URL after import
-   - `YOUR_AIRTABLE_BASE_ID` (12×)
-   - `YOUR_AIRTABLE_TABLE_ID` (12×): each node keeps the original table name (`Orders`, `Products`, `Support Cases`) as a hint. `Support Cases` also needs the fields `Slack Thread` and `Customer Email`.
+   - `THIS_WORKFLOW_ID` (3×): the workflow calls itself, so use its own ID from the URL after import
+   - `YOUR_AIRTABLE_BASE_ID` (13×)
+   - `YOUR_AIRTABLE_TABLE_ID` (13×): each node keeps the original table name (`Orders`, `Products`, `Support Cases`) as a hint. `Support Cases` also needs the fields `Slack Thread`, `Customer Email` and `Customer Name`.
    - `YOUR_SLACK_CHANNEL_ID` (11×): the channel that receives approvals, handovers, case threads, alerts and the daily summary
    - `YOUR_DATA_TABLE_ID` (5×): an n8n data table with the columns `messageId`, `sender`, `text` (strings) and `answered` (boolean). It remembers message IDs for 7 days, to skip duplicates and join bursts.
    - `YOUR_WHATSAPP_PHONE_NUMBER_ID` (3×): the phone number ID from the app's WhatsApp → API Setup page
