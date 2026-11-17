@@ -67,7 +67,9 @@
           "value": "={{ (() => { const m = String($('Prepare Message').first().json.message || ''); const risky = /refund|money back|reimburs|\\breturn|send (it|them) back|sent (it|them) back|exchange|\\bswap|replac|cancel|price match|difference|discount|damage|dented|broke|defect|faulty|\\blost\\b|stolen|lawyer|solicitor|attorney|legal|\\bsue\\b|court|chargeback|dispute|injur|\\bhurt|\\bburn|fire|flame|unsafe|danger|accident|hospital|bleed|allerg|third|3rd|fourth|again|still (no|not|nothing|waiting)|nobody|no one|ignor|ridiculous|unacceptable|furious|angry|worst|scam|terrible|awful|disgust|complain|manager|supervisor|human|real person|speak to|talk to|rembours|retour|chang|annul|avocat|plainte|furieu|bless|brûl|brul|reembols|devol|cambi|abogad|queja|furios|herid|quemad|denuncia|estafa|dinero|argent|roto|rota|dañad|endommag|disappoint|joke|forever|fed up|sick of|unhappy|not happy|upset|annoy|frustrat|horrible|useless|pathetic|silly|bank|reverse the|charged|paid twice|double charg|smok|\\bhot\\b|melt|spark|explod|leak|toxic|rash|wrong|missing|not working|stopped working|doesn't work|someone|a person|call me|no update|zero update|going on|cut (my|his|her|their)|trip|\\bfell\\b|fall/i; const shouting = (m.match(/\\b[A-Z]{4,}\\b/g) || []).filter((w) => !/^(USPS|FEDEX)$/.test(w)).length >= 2; return risky.test(m) || /!!/.test(m) || shouting ? 'gpt-6.1-terra' : 'gpt-6-luna'; })() }}"
         },
         "builtInTools": {},
-        "options": {}
+        "options": {
+          "reasoningEffort": "low"
+        }
       }
     },
     {
@@ -1927,7 +1929,7 @@
         -880
       ],
       "parameters": {
-        "content": "## 0 · Customer messages on WhatsApp\n\n- **Duplicates:** WhatsApp can deliver a message twice; **New Message?** skips repeats (data table \"Fernhill - WhatsApp Messages\").\n- **Text:** waits 4 seconds (**Wait For More**). If the customer sent several messages in a row, they are joined into one reply (**Merge Burst**).\n- **Photos** are saved to Google Drive and the agent gets the link. Voice notes, stickers and files become a short note asking the customer to type.\n\nThe answer goes back on WhatsApp (**On WhatsApp?**, section 1).",
+        "content": "## 0 · Customer messages on WhatsApp\n\n- **Duplicates:** WhatsApp can deliver a message twice; **New Message?** skips repeats (data table \"Fernhill - WhatsApp Messages\").\n- **Text:** waits 2 seconds (**Wait For More**). If the customer sent several messages in a row, they are joined into one reply (**Merge Burst**).\n- **Photos** are saved to Google Drive and the agent gets the link. Voice notes, stickers and files become a short note asking the customer to type.\n\nThe answer goes back on WhatsApp (**On WhatsApp?**, section 1).",
         "height": 712,
         "width": 1720
       }
@@ -2612,7 +2614,7 @@
         -384
       ],
       "parameters": {
-        "amount": 4
+        "amount": 2
       }
     },
     {
@@ -2659,7 +2661,7 @@
         -384
       ],
       "parameters": {
-        "jsCode": "// Customers often send several short messages in a row. Each one waited\n// 4 seconds; only the run for the newest unanswered message answers, with all\n// of them joined, so the customer gets one reply instead of several.\nconst me = $('Continue With Message').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => r.messageId).sort((a, b) => a.id - b.id);\nif (!rows.length || rows[rows.length - 1].messageId !== me.messageId) return [];\nreturn [{ json: { from: me.from, text: rows.map(r => r.text).join('\\n'), lastId: rows[rows.length - 1].id } }];\n"
+        "jsCode": "// Customers often send several short messages in a row. Each one waited\n// 2 seconds; only the run for the newest unanswered message answers, with all\n// of them joined, so the customer gets one reply instead of several.\nconst me = $('Continue With Message').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => r.messageId).sort((a, b) => a.id - b.id);\nif (!rows.length || rows[rows.length - 1].messageId !== me.messageId) return [];\nreturn [{ json: { from: me.from, text: rows.map(r => r.text).join('\\n'), lastId: rows[rows.length - 1].id } }];\n"
       }
     },
     {
